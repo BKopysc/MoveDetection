@@ -1,12 +1,9 @@
-from fileinput import close
 import math
-from multiprocessing.connection import wait
-from time import sleep
+from time import time
 import cv2
 import numpy as np
 from mpi4py import MPI
-from PIL import ImageGrab
-import sys, getopt
+import sys
 
 from utils import Utils
 
@@ -33,7 +30,6 @@ def detect_motion(pack, min_area):
     contours, _ = cv2.findContours(image=thresh_frame, mode=cv2.RETR_EXTERNAL, method=cv2.CHAIN_APPROX_SIMPLE)
     for contour in contours:
         if cv2.contourArea(contour) < min_area:
-            # too small: skip!
             continue
         (x, y, w, h) = cv2.boundingRect(contour)
         cv2.rectangle(img=f, pt1=(x, y), pt2=(x + w, y + h), color=(0, 255, 0), thickness=2)
@@ -46,43 +42,32 @@ def render_frame(comm, fps):
     frame_buffer = []
     fps2ms = int(1000/int(fps))
     frame_counter = 0
-    close_flag = False
 
-    # task_count = [0] * comm.Get_size()
-
-    # for i in range(0, 2):
-    #     task_count[i] = 2000000
+    last_time = time()
 
     while(True):
-        # recv_task_count = comm.irecv(source = 0, tag = 12)
-        # recv_task_count.wait()
-        # if recv_task_count != None:
-        #     task_count = recv_task_count
 
         status = MPI.Status() 
-        #print(status.Get_tag())
-        recv_data = comm.recv(source = MPI.ANY_SOURCE, tag=11)
-        # recv_data = recv_data_req.wait()        
+        recv_data = comm.recv(source = MPI.ANY_SOURCE, tag=11) 
         if (recv_data != None):
             frame_buffer.append(recv_data)
-            # task_count[i] -= 1
         
-        # req = comm.isend(task_count, dest=0, tag=12)
-        # req.wait()
-        
-        check_frames = [frame_buffer[i] for i in range(len(frame_buffer)) if frame_buffer[i][0] == frame_counter]
+        check_frames = [frame_buffer[i] for i in range(len(frame_buffer)) if frame_buffer[i][0] == frame_counter] 
 
-                
-
-        if len(check_frames) > 0:    
-
+        if len(check_frames) > 0:
             frame_to_view = check_frames[0]
             cv2.imshow('frame', frame_to_view[1])
             frame_buffer.remove(frame_to_view)
             frame_counter += 1
 
+            now = time()
+            calc_time = now - last_time
+            print(calc_time)
+
             if cv2.waitKey(fps2ms) == ord('q'):
                 break
+        
+            last_time = time()
 
     cv2.destroyAllWindows()
 
@@ -90,25 +75,22 @@ def render_frame(comm, fps):
 def capture_cam(comm, cap, basic_fps, fps):
     frame_count = 0
     previous_frame = None
-    # fps2ms = int(1000/int(fps))
-
-    # frames_packs = []
-    # packs_count= 0
     pack_id = 0
 
     dest_counter = 2
 
-    # task_count = [0] * comm.Get_size()
-
-
-    # for i in range(0, 2):
-    #     task_count[i] = 2000000
-
     first_loop = True
 
     while True:
+        
+        m_status = MPI.Status()
+        if(m_status.tag == 404):
+            flag_req = comm.recv(source=1, tag=404)
+            if(flag_req):
+                break
 
         ret, frame = cap.read()
+
         if not ret:
             print("No frames left")
             break 
@@ -121,23 +103,10 @@ def capture_cam(comm, cap, basic_fps, fps):
         if(previous_frame is None):
             previous_frame = frame
             continue
-        # recv_task_count = comm.irecv(source = 1, tag = 12)
-        # recv_task_count.wait()
-        # if recv_task_count != None:
-        #     task_count = recv_task_count  
-
-        # destination = 2
-        # min_tasks = task_count[2]
-
-        # for i in range(3, comm.Get_size()):
-        #     if task_count[i] < min_tasks:
-        #         min_tasks = task_count[i]
-        #         destination = i
 
 
         comm.send([previous_frame, frame, pack_id], dest=dest_counter, tag=10)
         pack_id += 1
-        # task_count[destination] += 1
         dest_counter += 1
         if dest_counter == comm.Get_size():
             dest_counter = 2
@@ -148,33 +117,6 @@ def capture_cam(comm, cap, basic_fps, fps):
             first_loop = False
             comm.send(True, dest=1, tag=21)
 
-        
-        status = MPI.Status
-        if(status.tag == 404):
-            flag_req = comm.recv(source=1, tag=404)
-            if(flag_req):
-                break
-
-
-        # req = comm.isend(task_count, dest=1, tag=12)
-        # req.wait()
-
-        # frames_packs.append([previous_frame, frame, pack_id])
-        # pack_id += 1
-        
-        # for i in range(0, comm_size):
-        #     packs_to_send = frames_packs[0]
-        #     frames_packs.pop[0]
-        #     comm.isend(packs_to_send)
-            
-        
-        # previous_frame, detect_frame = detect_motion([previous_frame, frame], min_area)
-
-        # cv2.imshow('frame', detect_frame)
-
-        # if cv2.waitKey(fps2ms) == ord('q'):
-        #     break
-
     
 def main(argv):
     comm = MPI.COMM_WORLD
@@ -182,16 +124,18 @@ def main(argv):
     size = comm.Get_size()
 
     if(not Utils.check_mpi_size(size)):
+        MPI.Finalize()
         sys.exit()
 
     fileName, isCam, fps, min_area = Utils.check_args(argv)
 
-    print("Program started")
+    if(not Utils.check_file(fileName)):
+        print("File does not exist or has wrong extension!")
+        MPI.Finalize()
+        sys.exit()
 
-    #print(fileName, isCam, fps, min_area)
 
     if(rank == 0):
-        print("start rank: ", rank)
         basic_fps = 0
         if fileName != '':
             cap = cv2.VideoCapture(fileName, cv2.CAP_ANY)
@@ -219,13 +163,7 @@ def main(argv):
 
     elif(rank == 1):
         print("start rank: ", rank)
-        fps = comm.recv(source=0, tag=20)
-
-        # task_count = [0] * comm.Get_size()
-        # for i in range(0, 2):
-        #     task_count[i] = 2000000
-        # comm.send(task_count, dest=0, tag=12)   
-        
+        fps = comm.recv(source=0, tag=20)  
         should_start = comm.recv(source=0, tag=21)
         render_frame(comm, fps)
 
@@ -236,18 +174,16 @@ def main(argv):
 
 
     else:
-        close_flag = False
-
         while(True):
-            pack = comm.recv(source = 0, tag = 10)
-            processed_pack = detect_motion(pack, min_area)
-            req = comm.send(processed_pack, dest=1, tag=11)
-
-            status = MPI.Status
-            if(status.tag == 404):
+            m_status = MPI.Status()
+            if(m_status.tag == 404):
                 flag_req = comm.recv(source=1, tag=404)
                 if(flag_req):
                     break
+
+            pack = comm.recv(source = 0, tag = 10)
+            processed_pack = detect_motion(pack, min_area)
+            req = comm.send(processed_pack, dest=1, tag=11)
     
     MPI.Finalize()
     exit(0)

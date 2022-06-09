@@ -1,4 +1,5 @@
 import sys, getopt
+import os.path
 
 class Utils:
 
@@ -6,6 +7,19 @@ class Utils:
         if(size < 3):
             print("Too few processes. At least 3! (-n 3)")
             return False
+        return True
+
+    def check_file(file):
+        is_exsist = os.path.exists(file)
+        
+        if(not is_exsist):
+            return False
+
+        is_extension = file.lower().endswith(('.mp4', '.mov', '.avi'))
+
+        if(not is_extension):
+            return False
+
         return True
         
 
