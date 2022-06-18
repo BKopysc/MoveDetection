@@ -1,5 +1,0 @@
-Równoległe, w czasie rzeczywistym, wykrywanie ruchu w sekwencji klatek filmowych (MPI, Python)
-
-pip freeze > requirements.txt
-
-https://mpi4py.readthedocs.io/en/stable/
