@@ -4,7 +4,9 @@
 
 Aplikacja:
 - działa równolegle wykorzystując MPI
-- wykrywa ruch na podanym wideo lub źródle obrazu (np. kamera internetowa)
+- wykrywa ruch w czasie rzeczywistym na podanym wideo lub źródle obrazu (np. kamera internetowa)
+
+[Dokumentacja](https://github.com/BKopysc/MoveDetection/blob/master/files/Dokumentacja_MoveDetection.pdf)
 
 ***
 
@@ -12,6 +14,10 @@ Aplikacja:
 
 Application:
 - works in parallel using MPI
-- detects movement on the given video or image source (e.g. webcam)
+- detects movement in real time on the given video or image source (e.g. webcam)
+
+[Documentation](https://github.com/BKopysc/MoveDetection/blob/master/files/Documentation_MoveDetection_en-US.pdf)
 
 ***
+
+![alt_text](https://github.com/BKopysc/MoveDetection/blob/master/files/finish.png)
